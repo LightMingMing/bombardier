@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/url"
 	"os"
-	"os/signal"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -489,25 +488,25 @@ func (b *bombardier) disableOutput() {
 	b.bar.NotPrint = true
 }
 
-func main() {
-	cfg, err := parser.parse(os.Args)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(exitFailure)
-	}
-	bombardier, err := newBombardier(cfg)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(exitFailure)
-	}
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		bombardier.barrier.cancel()
-	}()
-	bombardier.bombard()
-	if bombardier.conf.printResult {
-		bombardier.printStats()
-	}
-}
+//func main() {
+//	cfg, err := parser.parse(os.Args)
+//	if err != nil {
+//		fmt.Println(err)
+//		os.Exit(exitFailure)
+//	}
+//	bombardier, err := newBombardier(cfg)
+//	if err != nil {
+//		fmt.Println(err)
+//		os.Exit(exitFailure)
+//	}
+//	c := make(chan os.Signal, 1)
+//	signal.Notify(c, os.Interrupt)
+//	go func() {
+//		<-c
+//		bombardier.barrier.cancel()
+//	}()
+//	bombardier.bombard()
+//	if bombardier.conf.printResult {
+//		bombardier.printStats()
+//	}
+//}
