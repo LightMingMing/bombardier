@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -126,11 +127,53 @@ func newBombardier(c config) (*bombardier, error) {
 		}
 	}
 
+	var payload *payload
+	if c.payloadFile != "" {
+		payload, err = loadFromFile(c.payloadFile, strings.Split(c.varNames, ","), c.startLine)
+	} else if c.payloadUrl != "" {
+		payload, err = loadFromUrl(c.payloadUrl, strings.Split(c.varNames, ","), c.startLine, uint32(*c.numReqs))
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		resolveUrl     = false
+		resolveHerader = false
+		resolveBody    = false
+	)
+	if payload != nil {
+		c.url, err = url.PathUnescape(c.url)
+		if err != nil {
+			return nil, err
+		}
+		resolveUrl = containsPlaceholder(c.url)
+
+		if c.headers != nil {
+			for _, header := range *c.headers {
+				if containsPlaceholder(header.value) {
+					resolveHerader = true
+					break
+				}
+			}
+		}
+
+		if pbody != nil {
+			resolveBody = containsPlaceholder(*pbody)
+		}
+	}
+
 	cc := &clientOpts{
 		HTTP2:     false,
 		maxConns:  c.numConns,
 		timeout:   c.timeout,
 		tlsConfig: tlsConfig,
+
+		payload:       payload,
+		resolveUrl:    resolveUrl,
+		resolveHeader: resolveHerader,
+		resolveBody:   resolveBody,
 
 		headers:      c.headers,
 		url:          c.url,

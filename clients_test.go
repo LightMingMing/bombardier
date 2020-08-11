@@ -12,14 +12,14 @@ import (
 
 func TestShouldReturnNilIfNoHeadersWhereSet(t *testing.T) {
 	h := new(headersList)
-	if headersToFastHTTPHeaders(h) != nil {
+	if headersToFastHTTPHeaders(h, nil) != nil {
 		t.Fail()
 	}
 }
 
 func TestShouldReturnEmptyHeadersIfNoHeaadersWhereSet(t *testing.T) {
 	h := new(headersList)
-	if len(headersToHTTPHeaders(h)) != 0 {
+	if len(headersToHTTPHeaders(h, nil)) != 0 {
 		t.Fail()
 	}
 }
@@ -33,7 +33,7 @@ func TestShouldProperlyConvertToHttpHeaders(t *testing.T) {
 			t.Error(err)
 		}
 	}
-	fh := headersToFastHTTPHeaders(h)
+	fh := headersToFastHTTPHeaders(h, nil)
 	{
 		e, a := []byte("application/json"), fh.Peek("Content-Type")
 		if !bytes.Equal(e, a) {
@@ -44,7 +44,7 @@ func TestShouldProperlyConvertToHttpHeaders(t *testing.T) {
 		t.Errorf("Expected %v, but got %v", e, a)
 	}
 
-	nh := headersToHTTPHeaders(h)
+	nh := headersToHTTPHeaders(h, nil)
 	{
 		e, a := "application/json", nh.Get("Content-Type")
 		if e != a {

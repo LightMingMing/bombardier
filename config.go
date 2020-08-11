@@ -13,6 +13,10 @@ type config struct {
 	duration                       *time.Duration
 	url, method, certPath, keyPath string
 	body, bodyFilePath             string
+	payloadFile                    string
+	payloadUrl                     string
+	varNames                       string
+	startLine                      uint32
 	stream                         bool
 	headers                        *headersList
 	timeout                        time.Duration

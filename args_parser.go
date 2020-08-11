@@ -32,6 +32,10 @@ type kingpinParser struct {
 	method       string
 	body         string
 	bodyFilePath string
+	payloadFile  string
+	payloadUrl   string
+	varNames     string
+	startLine    uint32
 	stream       bool
 	certPath     string
 	keyPath      string
@@ -55,6 +59,10 @@ func newKingpinParser() argsParser {
 		method:       "GET",
 		body:         "",
 		bodyFilePath: "",
+		payloadFile:  "",
+		payloadUrl:   "",
+		varNames:     "",
+		startLine:    0,
 		stream:       false,
 		certPath:     "",
 		keyPath:      "",
@@ -93,6 +101,18 @@ func newKingpinParser() argsParser {
 		Default("").
 		Short('f').
 		StringVar(&kparser.bodyFilePath)
+	app.Flag("payload-file", "External File to use as user defined variables in http request").
+		Default("").
+		StringVar(&kparser.payloadFile)
+	app.Flag("payload-url", "External Url to exchange as user defined variables in http request").
+		Default("").
+		StringVar(&kparser.payloadUrl)
+	app.Flag("variable-names", "Variable names separated by commas").
+		Default("").
+		StringVar(&kparser.varNames)
+	app.Flag("start-line", "Read variables start from specified line if necessary").
+		PlaceHolder(strconv.FormatUint(0, 10)).
+		Uint32Var(&kparser.startLine)
 	app.Flag("stream", "Specify whether to stream body using "+
 		"chunked transfer encoding or to serve it from memory").
 		Short('s').
@@ -217,6 +237,10 @@ func (k *kingpinParser) parse(args []string) (config, error) {
 		method:         k.method,
 		body:           k.body,
 		bodyFilePath:   k.bodyFilePath,
+		payloadFile:    k.payloadFile,
+		payloadUrl:     k.payloadUrl,
+		varNames:       k.varNames,
+		startLine:      k.startLine,
 		stream:         k.stream,
 		keyPath:        k.keyPath,
 		certPath:       k.certPath,
