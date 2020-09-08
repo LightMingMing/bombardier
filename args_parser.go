@@ -36,6 +36,7 @@ type kingpinParser struct {
 	payloadUrl   string
 	varNames     string
 	startLine    uint32
+	scope        string
 	stream       bool
 	certPath     string
 	keyPath      string
@@ -63,6 +64,7 @@ func newKingpinParser() argsParser {
 		payloadUrl:   "",
 		varNames:     "",
 		startLine:    0,
+		scope:        "request",
 		stream:       false,
 		certPath:     "",
 		keyPath:      "",
@@ -113,6 +115,14 @@ func newKingpinParser() argsParser {
 	app.Flag("start-line", "Read variables start from specified line if necessary").
 		PlaceHolder(strconv.FormatUint(0, 10)).
 		Uint32Var(&kparser.startLine)
+
+	app.Flag("scope", "Variables scope: request or thread"+
+		"\n\t* request (variables are distinct within each request)"+
+		"\n\t* thread (variables will be shared across all requests within the same thread)"+
+		"\n\t* benchmark (variables will be shared across all threads)").
+		Default("request").
+		StringVar(&kparser.scope)
+
 	app.Flag("stream", "Specify whether to stream body using "+
 		"chunked transfer encoding or to serve it from memory").
 		Short('s').
@@ -241,6 +251,7 @@ func (k *kingpinParser) parse(args []string) (config, error) {
 		payloadUrl:     k.payloadUrl,
 		varNames:       k.varNames,
 		startLine:      k.startLine,
+		scope:          getScope(k.scope),
 		stream:         k.stream,
 		keyPath:        k.keyPath,
 		certPath:       k.certPath,

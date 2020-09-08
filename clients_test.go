@@ -103,7 +103,7 @@ func TestHTTP2Client(t *testing.T) {
 		bytesRead:    &bytesRead,
 		bytesWritten: &bytesWritten,
 	})
-	code, _, err := c.do()
+	code, _, err := c.do(0)
 	if err != nil {
 		t.Error(err)
 		return
@@ -163,7 +163,7 @@ func TestHTTP1Clients(t *testing.T) {
 	}
 	for _, c := range clients {
 		bytesRead, bytesWritten = 0, 0
-		code, _, err := c.do()
+		code, _, err := c.do(0)
 		if err != nil {
 			t.Error(err)
 			return

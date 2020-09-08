@@ -17,6 +17,7 @@ type config struct {
 	payloadUrl                     string
 	varNames                       string
 	startLine                      uint32
+	scope                          scope
 	stream                         bool
 	headers                        *headersList
 	timeout                        time.Duration
@@ -159,6 +160,25 @@ func allowedHTTPMethod(method string) bool {
 func canHaveBody(method string) bool {
 	i := sort.SearchStrings(cantHaveBody, method)
 	return !(i < len(cantHaveBody) && cantHaveBody[i] == method)
+}
+
+type scope int
+
+const (
+	request scope = iota
+	thread
+	benchmark
+)
+
+func getScope(s string) scope {
+	switch s {
+	case "benchmark":
+		return benchmark
+	case "thread":
+		return thread
+	default:
+		return request
+	}
 }
 
 type clientTyp int

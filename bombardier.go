@@ -131,7 +131,11 @@ func newBombardier(c config) (*bombardier, error) {
 	if c.payloadFile != "" {
 		payload, err = loadFromFile(c.payloadFile, strings.Split(c.varNames, ","), c.startLine)
 	} else if c.payloadUrl != "" {
-		payload, err = loadFromUrl(c.payloadUrl, strings.Split(c.varNames, ","), c.startLine, uint32(*c.numReqs))
+		if c.scope == request {
+			payload, err = loadFromUrl(c.payloadUrl, strings.Split(c.varNames, ","), c.startLine, uint32(*c.numReqs))
+		} else {
+			payload, err = loadFromUrl(c.payloadUrl, strings.Split(c.varNames, ","), c.startLine, uint32(c.numConns))
+		}
 	}
 
 	if err != nil {
@@ -171,6 +175,7 @@ func newBombardier(c config) (*bombardier, error) {
 		tlsConfig: tlsConfig,
 
 		payload:       payload,
+		scope:         c.scope,
 		resolveUrl:    resolveUrl,
 		resolveHeader: resolveHerader,
 		resolveBody:   resolveBody,
@@ -290,21 +295,21 @@ func (b *bombardier) writeStatistics(
 	atomic.AddUint64(counter, 1)
 }
 
-func (b *bombardier) performSingleRequest() {
-	code, msTaken, err := b.client.do()
+func (b *bombardier) performSingleRequest(idx uint64) {
+	code, msTaken, err := b.client.do(idx)
 	if err != nil {
 		b.errors.add(err)
 	}
 	b.writeStatistics(code, msTaken)
 }
 
-func (b *bombardier) worker() {
+func (b *bombardier) worker(idx uint64) {
 	done := b.barrier.done()
 	for b.barrier.tryGrabWork() {
 		if b.ratelimiter.pace(done) == brk {
 			break
 		}
-		b.performSingleRequest()
+		b.performSingleRequest(idx)
 		b.barrier.jobDone()
 	}
 }
@@ -375,9 +380,10 @@ func (b *bombardier) bombard() {
 	bombardmentBegin := time.Now()
 	b.start = time.Now()
 	for i := uint64(0); i < b.conf.numConns; i++ {
+		i := i
 		go func() {
 			defer b.workers.Done()
-			b.worker()
+			b.worker(i)
 		}()
 	}
 	go b.rateMeter()

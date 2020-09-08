@@ -63,7 +63,7 @@ func benchmarkFireRequest(c config, bm *testing.B) {
 		done := b.barrier.done()
 		for pb.Next() {
 			b.ratelimiter.pace(done)
-			b.performSingleRequest()
+			b.performSingleRequest(0)
 		}
 	})
 }

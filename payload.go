@@ -110,3 +110,13 @@ func (payload *payload) next() map[string]string {
 		}
 	}
 }
+
+func (payload *payload) get(s scope, idx uint64) map[string]string {
+	if s == request {
+		return payload.next()
+	} else if s == thread {
+		return payload.data[(payload.readCount+uint32(idx))%payload.len]
+	} else {
+		return payload.data[payload.readCount%payload.len]
+	}
+}

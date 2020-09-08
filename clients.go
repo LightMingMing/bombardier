@@ -14,7 +14,7 @@ import (
 )
 
 type client interface {
-	do() (code int, msTaken uint64, err error)
+	do(idx uint64) (code int, msTaken uint64, err error)
 }
 
 type bodyStreamProducer func() (io.ReadCloser, error)
@@ -27,6 +27,7 @@ type clientOpts struct {
 	tlsConfig *tls.Config
 
 	payload       *payload
+	scope         scope
 	resolveHeader bool
 	resolveUrl    bool
 	resolveBody   bool
@@ -44,6 +45,7 @@ type fasthttpClient struct {
 	client *fasthttp.HostClient
 
 	payload       *payload
+	scope         scope
 	resolveUrl    bool
 	resolveHeader bool
 	resolveBody   bool
@@ -98,10 +100,11 @@ func newFastHTTPClient(opts *clientOpts) client {
 	c.method, c.body = opts.method, opts.body
 	c.bodProd = opts.bodProd
 	c.payload = opts.payload
+	c.scope = opts.scope
 	return client(c)
 }
 
-func (c *fasthttpClient) do() (
+func (c *fasthttpClient) do(idx uint64) (
 	code int, msTaken uint64, err error,
 ) {
 	// prepare the request
@@ -110,7 +113,7 @@ func (c *fasthttpClient) do() (
 
 	var ctx map[string]string
 	if c.payload != nil {
-		ctx = c.payload.next()
+		ctx = c.payload.get(c.scope, idx)
 	}
 
 	if c.resolveHeader {
@@ -171,6 +174,7 @@ type httpClient struct {
 	client *http.Client
 
 	payload       *payload
+	scope         scope
 	resolveUrl    bool
 	resolveHeader bool
 	resolveBody   bool
@@ -210,6 +214,7 @@ func newHTTPClient(opts *clientOpts) client {
 	}
 	c.client = cl
 	c.payload = opts.payload
+	c.scope = opts.scope
 	c.resolveUrl = opts.resolveUrl
 	c.resolveHeader = opts.resolveHeader
 	c.resolveBody = opts.resolveBody
@@ -236,7 +241,7 @@ func newHTTPClient(opts *clientOpts) client {
 	return client(c)
 }
 
-func (c *httpClient) do() (
+func (c *httpClient) do(idx uint64) (
 	code int, msTaken uint64, err error,
 ) {
 	req := &http.Request{}
@@ -244,7 +249,7 @@ func (c *httpClient) do() (
 	var ctx map[string]string
 
 	if c.payload != nil {
-		ctx = c.payload.next()
+		ctx = c.payload.get(c.scope, idx)
 	}
 
 	if c.resolveHeader {
