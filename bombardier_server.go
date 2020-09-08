@@ -22,6 +22,7 @@ type TestingConfig struct {
 	PayloadUrl    string `json:"payloadUrl"`
 	VariableNames string
 	StartLine     uint32
+	Scope         string
 }
 
 type RestStatus struct {
@@ -87,6 +88,7 @@ func GetConfig(ctx *routing.Context) (*config, error) {
 		payloadUrl:  testingConfig.PayloadUrl,
 		varNames:    testingConfig.VariableNames,
 		startLine:   testingConfig.StartLine,
+		scope:       getScope(testingConfig.Scope),
 	}
 	if testingConfig.Headers != nil {
 		for _, header := range testingConfig.Headers {
