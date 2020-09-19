@@ -131,7 +131,7 @@ func RequestHandling(ctx *routing.Context) error {
 		},
 	}
 
-	reqStats := info.Result.RequestsStats(percentiles)
+	tps := float64(*config.numReqs) / bombardier.timeTaken.Seconds()
 	status := Status{Req1xx: info.Result.Req1XX,
 		Req2xx: info.Result.Req2XX,
 		Req3xx: info.Result.Req3XX,
@@ -144,7 +144,7 @@ func RequestHandling(ctx *routing.Context) error {
 		NumReqs:  *config.numReqs,
 		Status:   status,
 		Latency:  latency,
-		Tps:      fmt.Sprintf("%.2f", reqStats.Mean),
+		Tps:      fmt.Sprintf("%.2f", tps),
 	}
 	body, err := json.Marshal(result)
 	if err != nil {
