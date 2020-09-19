@@ -67,7 +67,7 @@ func loadFromUrl(payloadUrl string, columns []string, offset uint32, limit uint3
 	reqUrl, _ := url.Parse(payloadUrl)
 	reqUrl.RawQuery = params.Encode()
 
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(reqUrl.String())
 	if err != nil {
 		return nil, err
