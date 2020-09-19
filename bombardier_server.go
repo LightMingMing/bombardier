@@ -35,7 +35,8 @@ type Latency struct {
 	Avg         string            `json:"avg"`
 	StdDev      string            `json:"stdDev"`
 	Max         string            `json:"max"`
-	Percentiles map[string]uint64 `json:"percentiles"`
+	Min         string            `json:"min"`
+	Percentiles map[string]string `json:"percentiles"`
 }
 
 type Status struct {
@@ -113,18 +114,20 @@ func RequestHandling(ctx *routing.Context) error {
 
 	bombardier.bombard()
 	info := bombardier.gatherInfo()
-	percentiles := []float64{0.5, 0.75, 0.9, 0.95, 0.99}
+	percentiles := []float64{0.25, 0.5, 0.75, 0.9, 0.95, 0.99}
 	stats := info.Result.LatenciesStats(percentiles)
 	latency := Latency{
 		Avg:    fmt.Sprintf("%.2f", stats.Mean/1000),
 		Max:    fmt.Sprintf("%.2f", stats.Max/1000),
+		Min:    fmt.Sprintf("%.2f", stats.Min/1000),
 		StdDev: fmt.Sprintf("%.2f", stats.Stddev/1000),
-		Percentiles: map[string]uint64{
-			"0.5":  stats.Percentiles[0.5] / 1000,
-			"0.75": stats.Percentiles[0.75] / 1000,
-			"0.9":  stats.Percentiles[0.9] / 1000,
-			"0.95": stats.Percentiles[0.95] / 1000,
-			"0.99": stats.Percentiles[0.99] / 1000,
+		Percentiles: map[string]string{
+			"0.25": fmt.Sprintf("%.2f", float64(stats.Percentiles[0.25])/1000),
+			"0.5":  fmt.Sprintf("%.2f", float64(stats.Percentiles[0.5])/1000),
+			"0.75": fmt.Sprintf("%.2f", float64(stats.Percentiles[0.75])/1000),
+			"0.9":  fmt.Sprintf("%.2f", float64(stats.Percentiles[0.9])/1000),
+			"0.95": fmt.Sprintf("%.2f", float64(stats.Percentiles[0.95])/1000),
+			"0.99": fmt.Sprintf("%.2f", float64(stats.Percentiles[0.99])/1000),
 		},
 	}
 
