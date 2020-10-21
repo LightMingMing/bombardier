@@ -23,6 +23,14 @@ type TestingConfig struct {
 	VariableNames string
 	StartLine     uint32
 	Scope         string
+	Assertions    []Assertion
+}
+
+type Assertion struct {
+	Asserter   string
+	Expression string
+	Condition  string
+	Expected   string
 }
 
 type RestStatus struct {
@@ -55,6 +63,8 @@ type Result struct {
 	Status   Status  `json:"status"`
 	Latency  Latency `json:"latency"`
 	Tps      string  `json:"tps"`
+
+	ErrorCount uint64 `json:"errorCount"`
 }
 
 func ErrorHandling(ctx *routing.Context, code int, err error) error {
@@ -98,6 +108,18 @@ func GetConfig(ctx *routing.Context) (*config, error) {
 			}
 		}
 	}
+	assertions := make([]assertion, 0)
+	if testingConfig.Assertions != nil {
+		for _, a := range testingConfig.Assertions {
+			assertions = append(assertions, assertion{
+				asserter:   a.Asserter,
+				expression: a.Expression,
+				condition:  a.Condition,
+				expected:   a.Expected,
+			})
+		}
+	}
+	config.assertions = &assertions
 	return config, nil
 }
 
@@ -139,12 +161,13 @@ func RequestHandling(ctx *routing.Context) error {
 		Req5xx: info.Result.Req5XX,
 		Others: info.Result.Others}
 	result := Result{
-		Url:      config.url,
-		NumConns: config.numConns,
-		NumReqs:  *config.numReqs,
-		Status:   status,
-		Latency:  latency,
-		Tps:      fmt.Sprintf("%.2f", tps),
+		Url:        config.url,
+		NumConns:   config.numConns,
+		NumReqs:    *config.numReqs,
+		Status:     status,
+		Latency:    latency,
+		Tps:        fmt.Sprintf("%.2f", tps),
+		ErrorCount: bombardier.errorCount,
 	}
 	body, err := json.Marshal(result)
 	if err != nil {

@@ -31,6 +31,8 @@ type bombardier struct {
 	req5xx uint64
 	others uint64
 
+	errorCount uint64
+
 	conf        config
 	barrier     completionBarrier
 	ratelimiter limiter
@@ -186,6 +188,8 @@ func newBombardier(c config) (*bombardier, error) {
 		bodProd:      bsp,
 		bytesRead:    &b.bytesRead,
 		bytesWritten: &b.bytesWritten,
+
+		assertions: c.assertions,
 	}
 	b.client = makeHTTPClient(c.clientType, cc)
 
@@ -270,7 +274,7 @@ func (b *bombardier) prepareTemplate() (*template.Template, error) {
 }
 
 func (b *bombardier) writeStatistics(
-	code int, msTaken uint64,
+	code int, msTaken uint64, assertResult assertResult,
 ) {
 	b.latencies.Increment(msTaken)
 	b.rpl.Lock()
@@ -292,14 +296,18 @@ func (b *bombardier) writeStatistics(
 		counter = &b.others
 	}
 	atomic.AddUint64(counter, 1)
+
+	if !assertResult.successful {
+		atomic.AddUint64(&b.errorCount, 1)
+	}
 }
 
 func (b *bombardier) performSingleRequest(idx uint64) {
-	code, msTaken, err := b.client.do(idx)
+	code, msTaken, assertResult, err := b.client.do(idx)
 	if err != nil {
 		b.errors.add(err)
 	}
-	b.writeStatistics(code, msTaken)
+	b.writeStatistics(code, msTaken, assertResult)
 }
 
 func (b *bombardier) worker(idx uint64) {

@@ -14,7 +14,7 @@ import (
 )
 
 type client interface {
-	do(idx uint64) (code int, msTaken uint64, err error)
+	do(idx uint64) (code int, msTaken uint64, assertResult assertResult, err error)
 }
 
 type bodyStreamProducer func() (io.ReadCloser, error)
@@ -39,6 +39,8 @@ type clientOpts struct {
 	bodProd bodyStreamProducer
 
 	bytesRead, bytesWritten *int64
+
+	assertions *[]assertion
 }
 
 type fasthttpClient struct {
@@ -59,6 +61,8 @@ type fasthttpClient struct {
 
 	body    *string
 	bodProd bodyStreamProducer
+
+	assertions *[]assertion
 }
 
 func newFastHTTPClient(opts *clientOpts) client {
@@ -101,11 +105,13 @@ func newFastHTTPClient(opts *clientOpts) client {
 	c.bodProd = opts.bodProd
 	c.payload = opts.payload
 	c.scope = opts.scope
+
+	c.assertions = opts.assertions
 	return client(c)
 }
 
 func (c *fasthttpClient) do(idx uint64) (
-	code int, msTaken uint64, err error,
+	code int, msTaken uint64, assertResult assertResult, err error,
 ) {
 	// prepare the request
 	req := fasthttp.AcquireRequest()
@@ -127,7 +133,7 @@ func (c *fasthttpClient) do(idx uint64) (
 	if c.resolveUrl {
 		u, err := url.Parse(replace(c.rawUrl, ctx))
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, failure, err
 		}
 		c.url = u
 	}
@@ -148,7 +154,7 @@ func (c *fasthttpClient) do(idx uint64) (
 	} else {
 		bs, bserr := c.bodProd()
 		if bserr != nil {
-			return 0, 0, bserr
+			return 0, 0, failure, bserr
 		}
 		req.SetBodyStream(bs, -1)
 	}
@@ -162,6 +168,11 @@ func (c *fasthttpClient) do(idx uint64) (
 		code = resp.StatusCode()
 	}
 	msTaken = uint64(time.Since(start).Nanoseconds() / 1000)
+
+	assertResult = success
+	if len(*c.assertions) > 0 {
+		assertResult = assertThat(resp.Body(), *c.assertions)
+	}
 
 	// release resources
 	fasthttp.ReleaseRequest(req)
@@ -188,6 +199,8 @@ type httpClient struct {
 
 	body    *string
 	bodProd bodyStreamProducer
+
+	assertions *[]assertion
 }
 
 func newHTTPClient(opts *clientOpts) client {
@@ -238,11 +251,12 @@ func newHTTPClient(opts *clientOpts) client {
 		}
 	}
 
+	c.assertions = opts.assertions
 	return client(c)
 }
 
 func (c *httpClient) do(idx uint64) (
-	code int, msTaken uint64, err error,
+	code int, msTaken uint64, assertResult assertResult, err error,
 ) {
 	req := &http.Request{}
 
@@ -262,7 +276,7 @@ func (c *httpClient) do(idx uint64) (
 	if c.resolveUrl {
 		req.URL, err = url.Parse(replace(c.rawUrl, ctx))
 		if err != nil {
-			return 0, 0, err
+			return 0, 0, failure, err
 		}
 	} else {
 		req.URL = c.url
@@ -285,7 +299,7 @@ func (c *httpClient) do(idx uint64) (
 	} else {
 		bs, bserr := c.bodProd()
 		if bserr != nil {
-			return 0, 0, bserr
+			return 0, 0, failure, bserr
 		}
 		req.Body = bs
 	}
@@ -308,6 +322,7 @@ func (c *httpClient) do(idx uint64) (
 	}
 	msTaken = uint64(time.Since(start).Nanoseconds() / 1000)
 
+	assertResult = success
 	return
 }
 
