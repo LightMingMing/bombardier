@@ -12,32 +12,11 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type TestingConfig struct {
-	NumConns      uint64
-	NumReqs       uint64
-	Url           string
-	Method        string
-	Headers       []string
-	Body          string
-	PayloadFile   string `json:"payloadFile"`
-	PayloadUrl    string `json:"payloadUrl"`
-	VariableNames string
-	StartLine     uint32
-	Scope         string
-	Assertions    []Assertion
-}
-
 type Assertion struct {
 	Asserter   string
 	Expression string
 	Condition  string
 	Expected   string
-}
-
-type RestStatus struct {
-	Code    int    `json:"code"`
-	Status  string `json:"status"`
-	Message string `json:"error"`
 }
 
 type Latency struct {
@@ -57,7 +36,22 @@ type Status struct {
 	Others uint64 `json:"other"`
 }
 
-type Result struct {
+type BombardierRequest struct {
+	NumConns      uint64
+	NumReqs       uint64
+	Url           string
+	Method        string
+	Headers       []string
+	Body          string
+	PayloadFile   string `json:"payloadFile"`
+	PayloadUrl    string `json:"payloadUrl"`
+	VariableNames string
+	StartLine     uint32
+	Scope         string
+	Assertions    []Assertion
+}
+
+type BombardierResponse struct {
 	Url      string  `json:"url"`
 	NumConns uint64  `json:"numConns"`
 	NumReqs  uint64  `json:"numReqs"`
@@ -68,48 +62,44 @@ type Result struct {
 	ErrorCount uint64 `json:"errorCount"`
 }
 
-func ErrorHandling(ctx *fasthttp.RequestCtx, code int, err error) {
-	status := RestStatus{}
-	status.Code = code
-	status.Status = http.StatusText(code)
-	status.Message = err.Error()
-	body, err := json.Marshal(status)
-	if err == nil {
-		ctx.SetContentType("application/json")
-		ctx.SetBody(body)
-	}
-	ctx.SetStatusCode(code)
+type RestStatus struct {
+	Code    int    `json:"code"`
+	Status  string `json:"status"`
+	Message string `json:"error"`
 }
 
-func GetConfig(ctx *fasthttp.RequestCtx) (*config, error) {
-	testingConfig := &TestingConfig{}
-	if err := json.Unmarshal(ctx.PostBody(), testingConfig); err != nil {
-		return nil, err
-	}
+func readBombardierRequest(ctx *fasthttp.RequestCtx) (*BombardierRequest, error) {
+	request := &BombardierRequest{}
+	err := json.Unmarshal(ctx.PostBody(), request)
+	return request, err
+}
+
+func newConfig(req *BombardierRequest) (*config, error) {
+
 	config := &config{
-		numReqs:     &testingConfig.NumReqs,
-		numConns:    testingConfig.NumConns,
-		url:         testingConfig.Url,
-		method:      testingConfig.Method,
+		numReqs:     &req.NumReqs,
+		numConns:    req.NumConns,
+		url:         req.Url,
+		method:      req.Method,
 		headers:     &headersList{},
-		body:        testingConfig.Body,
+		body:        req.Body,
 		format:      formatFromString("pt"),
-		payloadFile: testingConfig.PayloadFile,
-		payloadUrl:  testingConfig.PayloadUrl,
-		varNames:    testingConfig.VariableNames,
-		startLine:   testingConfig.StartLine,
-		scope:       getScope(testingConfig.Scope),
+		payloadFile: req.PayloadFile,
+		payloadUrl:  req.PayloadUrl,
+		varNames:    req.VariableNames,
+		startLine:   req.StartLine,
+		scope:       getScope(req.Scope),
 	}
-	if testingConfig.Headers != nil {
-		for _, header := range testingConfig.Headers {
+	if req.Headers != nil {
+		for _, header := range req.Headers {
 			if err := config.headers.Set(header); err != nil {
 				return nil, err
 			}
 		}
 	}
 	assertions := make([]assertion, 0)
-	if testingConfig.Assertions != nil {
-		for _, a := range testingConfig.Assertions {
+	if req.Assertions != nil {
+		for _, a := range req.Assertions {
 			assertions = append(assertions, assertion{
 				asserter:   a.Asserter,
 				expression: a.Expression,
@@ -122,20 +112,7 @@ func GetConfig(ctx *fasthttp.RequestCtx) (*config, error) {
 	return config, nil
 }
 
-func RequestHandling(ctx *fasthttp.RequestCtx) {
-	config, err := GetConfig(ctx)
-	if err != nil {
-		ErrorHandling(ctx, http.StatusBadRequest, err)
-		return
-	}
-
-	bombardier, err := newBombardier(*config)
-	if err != nil {
-		ErrorHandling(ctx, http.StatusBadRequest, err)
-		return
-	}
-
-	bombardier.bombard()
+func gatherInfo(bombardier *bombardier) *BombardierResponse {
 	info := bombardier.gatherInfo()
 	percentiles := []float64{0.25, 0.5, 0.75, 0.9, 0.95, 0.99}
 	stats := info.Result.LatenciesStats(percentiles)
@@ -154,25 +131,62 @@ func RequestHandling(ctx *fasthttp.RequestCtx) {
 		},
 	}
 
-	tps := float64(*config.numReqs) / bombardier.timeTaken.Seconds()
+	tps := float64(*bombardier.conf.numReqs) / bombardier.timeTaken.Seconds()
 	status := Status{Req1xx: info.Result.Req1XX,
 		Req2xx: info.Result.Req2XX,
 		Req3xx: info.Result.Req3XX,
 		Req4xx: info.Result.Req4XX,
 		Req5xx: info.Result.Req5XX,
 		Others: info.Result.Others}
-	result := Result{
-		Url:        config.url,
-		NumConns:   config.numConns,
-		NumReqs:    *config.numReqs,
+	return &BombardierResponse{
+		Url:        bombardier.conf.url,
+		NumConns:   bombardier.conf.numConns,
+		NumReqs:    *bombardier.conf.numReqs,
 		Status:     status,
 		Latency:    latency,
 		Tps:        fmt.Sprintf("%.2f", tps),
 		ErrorCount: bombardier.errorCount,
 	}
-	body, err := json.Marshal(result)
+}
+
+func errorHandling(ctx *fasthttp.RequestCtx, code int, err error) {
+	status := RestStatus{}
+	status.Code = code
+	status.Status = http.StatusText(code)
+	status.Message = err.Error()
+	body, err := json.Marshal(status)
+	if err == nil {
+		ctx.SetContentType("application/json")
+		ctx.SetBody(body)
+	}
+	ctx.SetStatusCode(code)
+}
+
+func requestHandling(ctx *fasthttp.RequestCtx) {
+	req, err := readBombardierRequest(ctx)
 	if err != nil {
-		ErrorHandling(ctx, http.StatusInternalServerError, err)
+		errorHandling(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	config, err := newConfig(req)
+	if err != nil {
+		errorHandling(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	bombardier, err := newBombardier(*config)
+	if err != nil {
+		errorHandling(ctx, http.StatusBadRequest, err)
+		return
+	}
+
+	bombardier.bombard()
+
+	resp := gatherInfo(bombardier)
+	body, err := json.Marshal(resp)
+	if err != nil {
+		errorHandling(ctx, http.StatusInternalServerError, err)
 		return
 	}
 	ctx.SetBody(body)
@@ -189,7 +203,7 @@ func main() {
 
 	router := fasthttprouter.New()
 
-	router.POST("/api/pt", RequestHandling)
+	router.POST("/api/pt", requestHandling)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
