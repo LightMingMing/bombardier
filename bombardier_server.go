@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	routing "github.com/qiangxue/fasthttp-routing"
-	"github.com/valyala/fasthttp"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+
+	"github.com/buaazp/fasthttprouter"
+	"github.com/valyala/fasthttp"
 )
 
 type TestingConfig struct {
@@ -67,22 +68,20 @@ type Result struct {
 	ErrorCount uint64 `json:"errorCount"`
 }
 
-func ErrorHandling(ctx *routing.Context, code int, err error) error {
+func ErrorHandling(ctx *fasthttp.RequestCtx, code int, err error) {
 	status := RestStatus{}
 	status.Code = code
 	status.Status = http.StatusText(code)
 	status.Message = err.Error()
 	body, err := json.Marshal(status)
-	if err != nil {
-		return err
+	if err == nil {
+		ctx.SetContentType("application/json")
+		ctx.SetBody(body)
 	}
 	ctx.SetStatusCode(code)
-	ctx.SetContentType("application/json")
-	ctx.SetBody(body)
-	return nil
 }
 
-func GetConfig(ctx *routing.Context) (*config, error) {
+func GetConfig(ctx *fasthttp.RequestCtx) (*config, error) {
 	testingConfig := &TestingConfig{}
 	if err := json.Unmarshal(ctx.PostBody(), testingConfig); err != nil {
 		return nil, err
@@ -123,15 +122,17 @@ func GetConfig(ctx *routing.Context) (*config, error) {
 	return config, nil
 }
 
-func RequestHandling(ctx *routing.Context) error {
+func RequestHandling(ctx *fasthttp.RequestCtx) {
 	config, err := GetConfig(ctx)
 	if err != nil {
-		return ErrorHandling(ctx, http.StatusBadRequest, err)
+		ErrorHandling(ctx, http.StatusBadRequest, err)
+		return
 	}
 
 	bombardier, err := newBombardier(*config)
 	if err != nil {
-		return ErrorHandling(ctx, http.StatusBadRequest, err)
+		ErrorHandling(ctx, http.StatusBadRequest, err)
+		return
 	}
 
 	bombardier.bombard()
@@ -171,12 +172,12 @@ func RequestHandling(ctx *routing.Context) error {
 	}
 	body, err := json.Marshal(result)
 	if err != nil {
-		return ErrorHandling(ctx, http.StatusInternalServerError, err)
+		ErrorHandling(ctx, http.StatusInternalServerError, err)
+		return
 	}
 	ctx.SetBody(body)
 	ctx.SetStatusCode(http.StatusAccepted)
 	ctx.SetContentType("application/json")
-	return nil
 }
 
 func main() {
@@ -186,10 +187,9 @@ func main() {
 		os.Exit(-5)
 	}
 
-	router := routing.New()
-	api := router.Group("/api")
-	api.Post("/pt", RequestHandling)
-	router.NotFound(routing.NotFoundHandler)
+	router := fasthttprouter.New()
+
+	router.POST("/api/pt", RequestHandling)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -197,5 +197,5 @@ func main() {
 		<-c
 		_ = ln.Close()
 	}()
-	_ = fasthttp.Serve(ln, router.HandleRequest)
+	_ = fasthttp.Serve(ln, router.Handler)
 }
