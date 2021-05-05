@@ -7,8 +7,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"time"
 
 	"github.com/buaazp/fasthttprouter"
+	"github.com/fasthttp/websocket"
 	"github.com/valyala/fasthttp"
 )
 
@@ -194,6 +197,60 @@ func requestHandling(ctx *fasthttp.RequestCtx) {
 	ctx.SetContentType("application/json")
 }
 
+var upgrader = websocket.FastHTTPUpgrader{} // use default options
+
+func webSocketRequestHandling(c *websocket.Conn) {
+	defer c.Close()
+
+	_, reqData, err := c.ReadMessage()
+
+	req := &BombardierRequest{}
+	if err := json.Unmarshal(reqData, req); err != nil {
+		return
+	}
+
+	config, err := newConfig(req)
+	if err != nil {
+		return
+	}
+
+	bombardier, err := newBombardier(*config)
+	if err != nil {
+		return
+	}
+
+	go func() {
+		interval := 100 * time.Millisecond
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		tick := ticker.C
+		done := bombardier.barrier.done()
+		for {
+			select {
+			case <-tick:
+				reqs := strconv.Itoa(int(bombardier.barrier.completedReqs()))
+				c.WriteMessage(websocket.TextMessage, []byte(reqs))
+				continue
+			case <-done:
+				reqs := strconv.Itoa(int(bombardier.barrier.completedReqs()))
+				c.WriteMessage(websocket.TextMessage, []byte(reqs))
+				bombardier.workers.Wait()
+				return
+			}
+		}
+	}()
+	bombardier.bombard()
+
+	resp := gatherInfo(bombardier)
+
+	respData, err := json.Marshal(resp)
+	if err != nil {
+		return
+	}
+
+	c.WriteMessage(websocket.TextMessage, respData)
+}
+
 func main() {
 	ln, err := net.Listen("tcp4", ":8081")
 	if err != nil {
@@ -204,6 +261,10 @@ func main() {
 	router := fasthttprouter.New()
 
 	router.POST("/api/pt", requestHandling)
+
+	router.GET("/ws", func(ctx *fasthttp.RequestCtx) {
+		upgrader.Upgrade(ctx, webSocketRequestHandling)
+	})
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)

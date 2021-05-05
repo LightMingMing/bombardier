@@ -8,6 +8,7 @@ import (
 
 type completionBarrier interface {
 	completed() float64
+	completedReqs() uint64
 	tryGrabWork() bool
 	jobDone()
 	done() <-chan struct{}
@@ -66,8 +67,13 @@ func (c *countingCompletionBarrier) completed() float64 {
 	}
 }
 
+func (c *countingCompletionBarrier) completedReqs() uint64 {
+	return atomic.LoadUint64(&c.reqsDone)
+}
+
 type timedCompletionBarrier struct {
 	doneChan  chan struct{}
+	reqsDone  uint64
 	closeOnce sync.Once
 	start     time.Time
 	duration  time.Duration
@@ -79,6 +85,7 @@ func newTimedCompletionBarrier(duration time.Duration) completionBarrier {
 	}
 	c := new(timedCompletionBarrier)
 	c.doneChan = make(chan struct{})
+	c.reqsDone = 0
 	c.start = time.Now()
 	c.duration = duration
 	go func() {
@@ -101,6 +108,7 @@ func (c *timedCompletionBarrier) tryGrabWork() bool {
 }
 
 func (c *timedCompletionBarrier) jobDone() {
+	atomic.AddUint64(&c.reqsDone, 1)
 }
 
 func (c *timedCompletionBarrier) done() <-chan struct{} {
@@ -121,4 +129,8 @@ func (c *timedCompletionBarrier) completed() float64 {
 		return float64(time.Since(c.start).Nanoseconds()) /
 			float64(c.duration.Nanoseconds())
 	}
+}
+
+func (c *timedCompletionBarrier) completedReqs() uint64 {
+	return atomic.LoadUint64(&c.reqsDone)
 }
