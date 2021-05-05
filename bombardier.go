@@ -14,10 +14,9 @@ import (
 
 	"github.com/codesenberg/bombardier/internal"
 
-	"github.com/cheggaaa/pb"
 	fhist "github.com/codesenberg/concurrent/float64/histogram"
 	uhist "github.com/codesenberg/concurrent/uint64/histogram"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 type bombardier struct {
@@ -54,7 +53,7 @@ type bombardier struct {
 	errors *errorMap
 
 	// Progress bar
-	bar *pb.ProgressBar
+	// bar *pb.ProgressBar
 
 	// Output
 	out      io.Writer
@@ -70,15 +69,15 @@ func newBombardier(c config) (*bombardier, error) {
 	b.latencies = uhist.Default()
 	b.requests = fhist.Default()
 
-	if b.conf.testType() == counted {
-		b.bar = pb.New64(int64(*b.conf.numReqs))
-		b.bar.ShowSpeed = true
-	} else if b.conf.testType() == timed {
-		b.bar = pb.New64(b.conf.duration.Nanoseconds() / 1e9)
-		b.bar.ShowCounters = false
-		b.bar.ShowPercent = false
-	}
-	b.bar.ManualUpdate = true
+	// if b.conf.testType() == counted {
+	// 	b.bar = pb.New64(int64(*b.conf.numReqs))
+	// 	b.bar.ShowSpeed = true
+	// } else if b.conf.testType() == timed {
+	// 	b.bar = pb.New64(b.conf.duration.Nanoseconds() / 1e9)
+	// 	b.bar.ShowCounters = false
+	// 	b.bar.ShowPercent = false
+	// }
+	// b.bar.ManualUpdate = true
 
 	if b.conf.testType() == counted {
 		b.barrier = newCountingCompletionBarrier(*b.conf.numReqs)
@@ -193,10 +192,10 @@ func newBombardier(c config) (*bombardier, error) {
 	}
 	b.client = makeHTTPClient(c.clientType, cc)
 
-	if !b.conf.printProgress {
-		b.bar.Output = ioutil.Discard
-		b.bar.NotPrint = true
-	}
+	// if !b.conf.printProgress {
+	// 	b.bar.Output = ioutil.Discard
+	// 	b.bar.NotPrint = true
+	// }
 
 	b.template, err = b.prepareTemplate()
 	if err != nil {
@@ -205,7 +204,7 @@ func newBombardier(c config) (*bombardier, error) {
 
 	b.workers.Add(int(c.numConns))
 	b.errors = newErrorMap()
-	b.doneChan = make(chan struct{}, 2)
+	b.doneChan = make(chan struct{}, 1)
 	return b, nil
 }
 
@@ -321,27 +320,27 @@ func (b *bombardier) worker(idx uint64) {
 	}
 }
 
-func (b *bombardier) barUpdater() {
-	done := b.barrier.done()
-	for {
-		select {
-		case <-done:
-			b.bar.Set64(b.bar.Total)
-			b.bar.Update()
-			b.bar.Finish()
-			if b.conf.printProgress {
-				fmt.Fprintln(b.out, "Done!")
-			}
-			b.doneChan <- struct{}{}
-			return
-		default:
-			current := int64(b.barrier.completed() * float64(b.bar.Total))
-			b.bar.Set64(current)
-			b.bar.Update()
-			time.Sleep(b.bar.RefreshRate)
-		}
-	}
-}
+// func (b *bombardier) barUpdater() {
+// 	done := b.barrier.done()
+// 	for {
+// 		select {
+// 		case <-done:
+// 			b.bar.Set64(b.bar.Total)
+// 			b.bar.Update()
+// 			b.bar.Finish()
+// 			if b.conf.printProgress {
+// 				fmt.Fprintln(b.out, "Done!")
+// 			}
+// 			b.doneChan <- struct{}{}
+// 			return
+// 		default:
+// 			current := int64(b.barrier.completed() * float64(b.bar.Total))
+// 			b.bar.Set64(current)
+// 			b.bar.Update()
+// 			time.Sleep(b.bar.RefreshRate)
+// 		}
+// 	}
+// }
 
 func (b *bombardier) rateMeter() {
 	requestsInterval := 10 * time.Millisecond
@@ -383,7 +382,7 @@ func (b *bombardier) bombard() {
 	if b.conf.printIntro {
 		b.printIntro()
 	}
-	b.bar.Start()
+	// b.bar.Start()
 	bombardmentBegin := time.Now()
 	b.start = time.Now()
 	for i := uint64(0); i < b.conf.numConns; i++ {
@@ -394,11 +393,11 @@ func (b *bombardier) bombard() {
 		}()
 	}
 	go b.rateMeter()
-	go b.barUpdater()
+	// go b.barUpdater()
 	b.workers.Wait()
 	b.timeTaken = time.Since(bombardmentBegin)
 	<-b.doneChan
-	<-b.doneChan
+	// <-b.doneChan
 }
 
 func (b *bombardier) printIntro() {
@@ -487,13 +486,13 @@ func (b *bombardier) printStats() {
 }
 
 func (b *bombardier) redirectOutputTo(out io.Writer) {
-	b.bar.Output = out
-	b.out = out
+	// b.bar.Output = out
+	// b.out = out
 }
 
 func (b *bombardier) disableOutput() {
-	b.redirectOutputTo(ioutil.Discard)
-	b.bar.NotPrint = true
+	// 	b.redirectOutputTo(ioutil.Discard)
+	// 	b.bar.NotPrint = true
 }
 
 //func main() {
