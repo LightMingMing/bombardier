@@ -200,7 +200,7 @@ func requestHandling(ctx *fasthttp.RequestCtx) {
 var upgrader = websocket.FastHTTPUpgrader{} // use default options
 
 func webSocketRequestHandling(c *websocket.Conn) {
-	defer c.Close()
+	// defer c.Close()
 
 	_, reqData, err := c.ReadMessage()
 
@@ -232,14 +232,17 @@ func webSocketRequestHandling(c *websocket.Conn) {
 				c.WriteMessage(websocket.TextMessage, []byte(reqs))
 				continue
 			case <-done:
+				bombardier.workers.Wait()
 				reqs := strconv.Itoa(int(bombardier.barrier.completedReqs()))
 				c.WriteMessage(websocket.TextMessage, []byte(reqs))
-				bombardier.workers.Wait()
+				bombardier.doneChan <- struct{}{}
 				return
 			}
 		}
 	}()
 	bombardier.bombard()
+
+	<-bombardier.doneChan
 
 	resp := gatherInfo(bombardier)
 
